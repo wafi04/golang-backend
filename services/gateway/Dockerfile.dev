@@ -1,0 +1,20 @@
+FROM golang:1.22-alpine
+
+# Install Air
+RUN  go install github.com/cosmtrek/air@v1.44.0
+
+WORKDIR /app
+
+# Copy go mod and sum files
+COPY go.mod go.sum ./
+
+# Download dependencies
+RUN go mod download
+
+# Copy project files
+COPY . .
+
+WORKDIR /app/services/gateway
+
+# Use Air for development
+CMD ["air"]
