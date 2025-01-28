@@ -18,58 +18,56 @@ import (
 
 type AuthHandler struct {
 	authClient pb.AuthServiceClient
-	logger common.Logger
+	logger     common.Logger
 }
 
 func ConnectWithRetry(target string, service string) (*grpc.ClientConn, error) {
-    maxAttempts := 5
-    var conn *grpc.ClientConn
-    var err error
-    
-    for i := 0; i < maxAttempts; i++ {
-        ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-        defer cancel()
-        
-        log.Printf("Attempting to connect to %s service (attempt %d/%d)...", service, i+1, maxAttempts)
-        
-        conn, err = grpc.DialContext(ctx,
-            target,
-            grpc.WithTransportCredentials(insecure.NewCredentials()),
-            grpc.WithBlock(),
-        ) 
-    
-        if err == nil {
-            log.Printf("Successfully connected to %s service", service)
-            return conn, nil
-        }
-        
-        log.Printf("Failed to connect to %s service: %v. Retrying...", service, err)
-        time.Sleep(2 * time.Second)
-    }
-    
-    return nil, fmt.Errorf("failed to connect to %s service after %d attempts: %v", service, maxAttempts, err)
+	maxAttempts := 5
+	var conn *grpc.ClientConn
+	var err error
+
+	for i := 0; i < maxAttempts; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		log.Printf("Attempting to connect to %s service (attempt %d/%d)...", service, i+1, maxAttempts)
+
+		conn, err = grpc.DialContext(ctx,
+			target,
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithBlock(),
+		)
+
+		if err == nil {
+			log.Printf("Successfully connected to %s service", service)
+			return conn, nil
+		}
+
+		log.Printf("Failed to connect to %s service: %v. Retrying...", service, err)
+		time.Sleep(2 * time.Second)
+	}
+
+	return nil, fmt.Errorf("failed to connect to %s service after %d attempts: %v", service, maxAttempts, err)
 }
 
 func NewGateway(ctx context.Context) (*AuthHandler, error) {
-    conn, err := ConnectWithRetry("192.168.100.81:50051", "auth")
-    if err != nil {
-        return nil, err
-    }
-    
-    return &AuthHandler{
-        authClient: pb.NewAuthServiceClient(conn),
-    }, nil
+	conn, err := ConnectWithRetry("auth:5001", "auth")
+	if err != nil {
+		return nil, err
+	}
+
+	return &AuthHandler{
+		authClient: pb.NewAuthServiceClient(conn),
+	}, nil
 }
-
-
 
 func (h *AuthHandler) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received create user request: %s %s", r.Method, r.URL.Path)
 
 	var req struct {
-		Name string `json:"name"`
-		Email  string  `json:"email"`
-		Password string  `json:"password"`
+		Name     string `json:"name"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("Error decoding request body: %v", err)
@@ -81,12 +79,12 @@ func (h *AuthHandler) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 	clientIP := common.GetClientIP(r)
 	userAgent := r.UserAgent()
 
-	regis :=  &pb.CreateUserRequest{
-		Name: req.Name,
-		Email: req.Email,
-		Password: req.Password,
-		Role: "",
-		IpAddress: clientIP,
+	regis := &pb.CreateUserRequest{
+		Name:       req.Name,
+		Email:      req.Email,
+		Password:   req.Password,
+		Role:       "",
+		IpAddress:  clientIP,
 		DeviceInfo: userAgent,
 	}
 
@@ -173,23 +171,23 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandler) HandleGetProfile(w http.ResponseWriter, r *http.Request) {
 	h.logger.Log((common.InfoLevel), "caaled profile")
-    userid,err := middleware.GetUserFromContext(r.Context())
+	userid, err := middleware.GetUserFromContext(r.Context())
 
-	 if err != nil {
-			h.logger.Log(common.ErrorLevel, "caaled profile : %v",err)
-        return
-    }
+	if err != nil {
+		h.logger.Log(common.ErrorLevel, "caaled profile : %v", err)
+		return
+	}
 
-	users ,err :=   h.authClient.GetUser(r.Context(), &pb.GetUserRequest{
+	users, err := h.authClient.GetUser(r.Context(), &pb.GetUserRequest{
 		UserId: userid.UserId,
 	})
 
-    if err != nil {
+	if err != nil {
 		common.Error(http.StatusUnauthorized, "Unauthorized")
-        return
-    }
-    w.Header().Set("Content-Type", "application/json")
-    response := common.Success(users, "Profile received successfully")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	response := common.Success(users, "Profile received successfully")
 
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.Printf("Error encoding response: %v", err)
@@ -198,23 +196,23 @@ func (h *AuthHandler) HandleGetProfile(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *AuthHandler)   HandleLogout(w http.ResponseWriter,  r *http.Request){
-	user , err :=   middleware.GetUserFromContext(r.Context())
-	token :=  r.URL.Query().Get("token")
+func (h *AuthHandler) HandleLogout(w http.ResponseWriter, r *http.Request) {
+	user, err := middleware.GetUserFromContext(r.Context())
+	token := r.URL.Query().Get("token")
 
 	if err != nil {
 		common.Error(http.StatusUnauthorized, "Unauthorized")
-        return
+		return
 	}
 
-	logout,err :=  h.authClient.Logout(r.Context(), &pb.LogoutRequest{
+	logout, err := h.authClient.Logout(r.Context(), &pb.LogoutRequest{
 		AccessToken: token,
-		UserId: user.UserId,
+		UserId:      user.UserId,
 	})
 
 	if err != nil {
 		common.Error(http.StatusUnauthorized, "Unauthorized")
-        return
+		return
 	}
 
 	if err := json.NewEncoder(w).Encode(logout); err != nil {

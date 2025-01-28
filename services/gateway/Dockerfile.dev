@@ -1,20 +1,91 @@
 FROM golang:1.22-alpine
 
-# Install Air
-RUN  go install github.com/cosmtrek/air@v1.44.0
+RUN go install github.com/cosmtrek/air@v1.44.0
 
 WORKDIR /app
 
-# Copy go mod and sum files
 COPY go.mod go.sum ./
 
-# Download dependencies
+
 RUN go mod download
 
-# Copy project files
 COPY . .
 
 WORKDIR /app/services/gateway
 
-# Use Air for development
-CMD ["air"]
+COPY <<EOF /app/services/gateway/.air.toml
+root = "."
+tmp_dir = "tmp"
+
+[build]
+cmd = "go build -o ./tmp/main ."
+bin = "tmp/main"
+full_bin = "./tmp/main"
+include_ext = ["go", "tpl", "tmpl", "html"]
+exclude_dir = ["assets", "tmp", "vendor", "frontend/node_modules", "tests"]
+include_dir = []
+exclude_file = []
+delay = 1000
+stop_on_error = true
+send_interrupt = false
+kill_delay = 500
+
+[log]
+time = false
+
+[color]
+main = "magenta"
+watcher = "cyan"
+build = "yellow"
+runner = "green"
+
+[misc]
+clean_on_exit = true
+
+[screen]
+clear_on_rebuild = true
+keep_scroll = true
+EOF
+
+# Create start.sh file
+COPY <<EOF /start.sh
+#!/bin/sh
+
+# Menunggu service auth siap
+until nc -z auth 5001; do
+  echo "Waiting for auth to be ready..."
+  sleep 2
+done
+echo "auth is ready!"
+
+# Menunggu service category siap
+until nc -z category 5002; do
+  echo "Waiting for category to be ready..."
+  sleep 2
+done
+echo "category is ready!"
+
+# Menunggu service product siap
+until nc -z product 5003; do
+  echo "Waiting for product to be ready..."
+  sleep 2
+done
+echo "product is ready!"
+
+# Menunggu service files siap
+until nc -z files 5004; do
+  echo "Waiting for files to be ready..."
+  sleep 2
+done
+echo "files is ready!"
+
+# Beri waktu tambahan untuk memastikan semua service benar-benar siap
+sleep 5
+
+# Jalankan Air untuk development
+air
+EOF
+
+RUN chmod +x /start.sh
+
+CMD ["/start.sh"]

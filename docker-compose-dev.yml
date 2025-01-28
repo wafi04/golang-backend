@@ -1,0 +1,297 @@
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_MULTIPLE_DATABASES: auth,category,product
+    ports:
+      - "5432:5432"
+    volumes:
+      - /test-mount/postgres_data:/var/lib/postgresql/data  
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  redis:
+    image: redis:7.0.12  
+    container_name: redis
+    ports:
+      - "6379:6379"  
+    environment:
+      - REDIS_PASSWORD=P@ssw0rd*1  
+    command: redis-server --requirepass P@ssw0rd*1 --appendonly yes  
+    volumes:
+      - /test-mount/redis_data:/data  
+      - /test-mount/redis.conf:/usr/local/etc/redis/redis.conf  
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 512M  
+          cpus: "1.0"
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: redis-commander
+    ports:
+      - "8081:8081"
+    environment:
+      - REDIS_HOSTS=redis:redis:6379:0:P@ssw0rd*1  # Format: name:host:port:db:password
+    networks:
+      - backend
+    depends_on:
+      - redis
+  auth:
+    build:
+      context: .
+      dockerfile: services/auth/Dockerfile.dev
+    ports:
+      - "5001:5001"
+      - "5051:5051"
+    environment:
+      - SERVICE_NAME=auth
+      - AUTH_PORT=:5001
+      - DATABASE_AUTH=postgres://postgres:postgres@postgres:5432/auth?sslmode=disable&search_path=public
+    networks:
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - ./services/auth/.env
+    volumes:
+      - ./services/auth:/app/services/auth
+      - /test-mount/auth_data:/app/data  
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "5001"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  category:
+    build:
+      context: .
+      dockerfile: services/category/Dockerfile.dev
+    ports:
+      - "5002:5002"
+      - "5052:5052"
+    environment:
+      - SERVICE_NAME=category
+      - CATEGORY_PORT=:5002
+      - DATABASE_CATEGORY=postgres://postgres:postgres@postgres:5432/category?sslmode=disable&search_path=public
+    networks:
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - ./services/category/.env
+    volumes:
+      - ./services/category:/app/services/category
+      - /test-mount/category_data:/app/data 
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "5002"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  product:
+    build:
+      context: .
+      dockerfile: services/product/Dockerfile.dev
+    ports:
+      - "5003:5003"
+      - "5053:5053"
+    environment:
+      - SERVICE_NAME=product
+      - PRODUCT_PORT=:5003
+      - DATABASE_PRODUCT=postgres://postgres:postgres@postgres:5432/product?sslmode=disable&search_path=public
+    networks:
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - ./services/product/.env
+    volumes:
+      - ./services/product:/app/services/product
+      - /test-mount/product_data:/app/data  
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "5003"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  files:
+    build:
+      context: .
+      dockerfile: services/files/Dockerfile.dev
+    ports:
+      - "5004:5004"
+      - "5054:5054"
+    environment:
+      - SERVICE_NAME=files
+      - FILES_PORT=:5004
+    networks:
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - ./services/files/.env
+    volumes:
+      - ./services/files:/app/services/files
+      - /test-mount/files_data:/app/data  # Gunakan /test-mount
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "5004"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+
+  gateway:
+    build:
+      context: .
+      dockerfile: services/gateway/Dockerfile.dev
+    ports:
+      - "4000:4000"
+    environment:
+      - AUTH_SERVICE_URL=auth:5001
+      - CATEGORY_SERVICE_URL=category:5002
+      - PRODUCT_SERVICE_URL=product:5003
+      - FILES_SERVICE_URL=files:5004
+    depends_on:
+      auth:
+        condition: service_healthy
+      category:
+        condition: service_healthy
+      product:
+        condition: service_healthy
+      files:
+        condition: service_healthy
+    networks:
+      - backend
+    env_file:
+      - ./services/gateway/.env
+    volumes:
+      - ./services/gateway:/app/services/gateway
+      - /test-mount/gateway_data:/app/data
+
+  order:
+    build:
+      context: .
+      dockerfile: services/order/Dockerfile.dev
+    ports:
+      - "5006:5006"
+      - "5056:5056"
+    environment:
+      - SERVICE_NAME=order
+      - ORDERS_PORT=:5006
+      - REDIS_URL=redis://redis:6379
+      - REDIS_PASSWORD=P@ssw0rd*1
+      - DATABASE_STOCK=postgres://postgres:postgres@postgres:5432/stock?sslmode=disable&search_path=public
+    networks:
+      - backend
+    depends_on:
+      redis:
+        condition: service_healthy
+    env_file:
+      - ./services/order/.env
+    volumes:
+      - ./services/order:/app/services/order
+      - /test-mount/order_data:/app/data
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "5006"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  stock:
+    build:
+      context: .
+      dockerfile: services/stock/Dockerfile.dev
+    ports:
+      - "5005:5005"
+      - "5055:5055"
+    environment:
+      - SERVICE_NAME=stock
+      - STOCK_PORT=:5005
+      - REDIS_URL=redis://redis:6379
+      - REDIS_PASSWORD=P@ssw0rd*1
+      - DATABASE_STOCK=postgres://postgres:postgres@postgres:5432/stock?sslmode=disable&search_path=public
+    networks:
+      - backend
+    depends_on:
+      redis:
+        condition: service_healthy
+    env_file:
+      - ./services/stock/.env
+    volumes:
+      - ./services/stock:/app/services/stock
+      - /test-mount/stock_data:/app/data
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "5005"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: promotheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - backend
+    depends_on:
+      - auth
+      - category
+      - product
+      - files
+      - gateway
+  
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana-storage:/var/lib/grafana
+    networks:
+      - backend
+    depends_on:
+      - prometheus
+
+    
+networks:
+  backend:
+    driver: bridge
+
+volumes:
+  grafana-storage:

@@ -17,11 +17,9 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-
 type UserRepository struct {
 	DB     *sqlx.DB
 	logger common.Logger
-    
 }
 
 func NewUserRepository(db *sqlx.DB) *UserRepository {
@@ -30,9 +28,8 @@ func NewUserRepository(db *sqlx.DB) *UserRepository {
 	}
 }
 
-
 func (r *UserRepository) CreateUser(ctx context.Context, req *pb.CreateUserRequest) (pb.CreateUserResponse, error) {
-	
+
 	role := "user"
 	if req.Email == "wafiq610@gmail.com" {
 		role = "admin"
@@ -45,21 +42,21 @@ func (r *UserRepository) CreateUser(ctx context.Context, req *pb.CreateUserReque
             is_active, is_email_verified, created_at, updated_at
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     `
-    _, err := r.DB.ExecContext(
-        ctx, query,
-        userID, req.Name, req.Email, req.Password, role,
-        true, false, now, now,
-    )
+	_, err := r.DB.ExecContext(
+		ctx, query,
+		userID, req.Name, req.Email, req.Password, role,
+		true, false, now, now,
+	)
 
 	if err != nil {
 		return pb.CreateUserResponse{}, fmt.Errorf("failed to create verification token: %w", err)
 	}
 
 	token, err := middleware.GenerateToken(&pb.UserInfo{
-		UserId: userID,
-		Name: req.Name,
-		Email: req.Email,
-		Role: role,
+		UserId:          userID,
+		Name:            req.Name,
+		Email:           req.Email,
+		Role:            role,
 		IsEmailVerified: false,
 	})
 	if err != nil {
@@ -85,18 +82,18 @@ func (r *UserRepository) CreateUser(ctx context.Context, req *pb.CreateUserReque
 	}
 
 	return pb.CreateUserResponse{
-    UserId: userID, 
-    Name:   req.Name,
-    Email:  req.Email,
-    Role:   role,
-    Picture: req.Picture,
-	AccessToken: token,
-	SessionInfo: &pb.Session{
-		SessionId: session.SessionId,
-		DeviceInfo: session.DeviceInfo,
-		IpAddress: session.IpAddress,
-	},
-}, nil
+		UserId:      userID,
+		Name:        req.Name,
+		Email:       req.Email,
+		Role:        role,
+		Picture:     req.Picture,
+		AccessToken: token,
+		SessionInfo: &pb.Session{
+			SessionId:  session.SessionId,
+			DeviceInfo: session.DeviceInfo,
+			IpAddress:  session.IpAddress,
+		},
+	}, nil
 
 }
 
@@ -175,8 +172,7 @@ func (r *UserRepository) Login(ctx context.Context, login *pb.LoginRequest) (*pb
 		return nil, fmt.Errorf("failed to generate tokens: %w", err)
 	}
 
-
-	 query = `
+	query = `
         SELECT 
             session_id, 
             ip_address,
@@ -188,62 +184,62 @@ func (r *UserRepository) Login(ctx context.Context, login *pb.LoginRequest) (*pb
     `
 
 	var existingSession pb.Session
-    err = r.DB.QueryRowContext(ctx, query, userInfo.UserId,login.DeviceInfo).Scan(
-        &existingSession.SessionId,
-        &existingSession.IpAddress,
-        &existingSession.DeviceInfo,
-        &existingSession.CreatedAt,
-        &existingSession.LastActivityAt,
-    )
+	err = r.DB.QueryRowContext(ctx, query, userInfo.UserId, login.DeviceInfo).Scan(
+		&existingSession.SessionId,
+		&existingSession.IpAddress,
+		&existingSession.DeviceInfo,
+		&existingSession.CreatedAt,
+		&existingSession.LastActivityAt,
+	)
 
-    if err != nil && err != sql.ErrNoRows {
-        return nil, fmt.Errorf("error checking existing session: %w", err)
-    }
+	if err != nil && err != sql.ErrNoRows {
+		return nil, fmt.Errorf("error checking existing session: %w", err)
+	}
 
-    if err == sql.ErrNoRows {
-        existingSession = pb.Session{
-            SessionId:      uuid.New().String(),
-            UserId:         userInfo.UserId,
-            AccessToken:    token,
-            RefreshToken:   token,
-            IpAddress:      login.IpAddress,
-            DeviceInfo:     login.DeviceInfo,
-            CreatedAt:      time.Now().Unix(),
-            LastActivityAt: time.Now().Unix(),
-            IsActive:       true,
-            ExpiresAt:      time.Now().Unix(),
-        }
+	if err == sql.ErrNoRows {
+		existingSession = pb.Session{
+			SessionId:      uuid.New().String(),
+			UserId:         userInfo.UserId,
+			AccessToken:    token,
+			RefreshToken:   token,
+			IpAddress:      login.IpAddress,
+			DeviceInfo:     login.DeviceInfo,
+			CreatedAt:      time.Now().Unix(),
+			LastActivityAt: time.Now().Unix(),
+			IsActive:       true,
+			ExpiresAt:      time.Now().Unix(),
+		}
 
-        err = r.CreateSession(ctx, &existingSession)
-        if err != nil {
-            return nil, fmt.Errorf("failed to create session: %w", err)
-        }
-    }
+		err = r.CreateSession(ctx, &existingSession)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create session: %w", err)
+		}
+	}
 
 	_, err = r.DB.ExecContext(
-    ctx,
-	"UPDATE users SET last_login_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE user_id = $1",
-    userInfo.UserId,
-		)
+		ctx,
+		"UPDATE users SET last_login_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE user_id = $1",
+		userInfo.UserId,
+	)
 	if err != nil {
 		r.logger.Log(common.ErrorLevel, "Failed to update last login: %v", err)
 	}
 
-    return &pb.LoginResponse{
-        AccessToken: token,
-        UserId:      userInfo.UserId,
-        SessionInfo: &pb.SessionInfo{
-            SessionId:      existingSession.SessionId,
-            DeviceInfo:     existingSession.DeviceInfo,
-            IpAddress:      existingSession.IpAddress,
-            CreatedAt:      existingSession.CreatedAt,
-            LastActivityAt: existingSession.LastActivityAt,
-        },
-    }, nil
+	return &pb.LoginResponse{
+		AccessToken: token,
+		UserId:      userInfo.UserId,
+		SessionInfo: &pb.SessionInfo{
+			SessionId:      existingSession.SessionId,
+			DeviceInfo:     existingSession.DeviceInfo,
+			IpAddress:      existingSession.IpAddress,
+			CreatedAt:      existingSession.CreatedAt,
+			LastActivityAt: existingSession.LastActivityAt,
+		},
+	}, nil
 }
 
 func (sr *UserRepository) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.GetUserResponse, error) {
-    query := `
+	query := `
         SELECT 
             user_id, 
             name, 
@@ -258,67 +254,63 @@ func (sr *UserRepository) GetUser(ctx context.Context, req *pb.GetUserRequest) (
         FROM users
         WHERE user_id = $1
     `
-	
-    user := &pb.GetUserResponse{
-        User: &pb.UserInfo{},
-    }
 
-    var (
-        isActive bool
-        createdAt, updatedAt, lastLoginAt time.Time
-        picture sql.NullString 
-    )
-    err := sr.DB.QueryRowContext(ctx, query, req.UserId).Scan(
-        &user.User.UserId,
-        &user.User.Name,
-        &user.User.Email,
-        &picture, 
-        &user.User.Role,
-        &isActive,
-        &user.User.IsEmailVerified,
-        &createdAt,
-        &updatedAt,
-        &lastLoginAt,
-    )
+	user := &pb.GetUserResponse{
+		User: &pb.UserInfo{},
+	}
 
-    if err != nil {
-        if err == sql.ErrNoRows {
-            return nil, status.Errorf(codes.NotFound, "user not found")
-        }
-        sr.logger.Log(common.ErrorLevel, "Error fetching user: %v", err)
-        return nil, status.Errorf(codes.Internal, "database error")
-    }
-
-	if picture.Valid {
-        user.User.Picture = picture.String
-    }
-	
-    user.User.CreatedAt = createdAt.Unix()
-    user.User.UpdatedAt = updatedAt.Unix()
-    user.User.LastLoginAt = lastLoginAt.Unix()
-    return user, nil
-}
-
-func (sr   *UserRepository) Logout(ctx context.Context,req *pb.LogoutRequest) (*pb.LogoutResponse,error){
-	query  := `
-	DELETE FROM sessions
-    WHERE access_token = $1 AND user_id = $2
-	`
-	_,err :=  sr.DB.ExecContext(ctx, query, req.AccessToken,req.UserId)
+	var (
+		isActive                          bool
+		createdAt, updatedAt, lastLoginAt time.Time
+		picture                           sql.NullString
+	)
+	err := sr.DB.QueryRowContext(ctx, query, req.UserId).Scan(
+		&user.User.UserId,
+		&user.User.Name,
+		&user.User.Email,
+		&picture,
+		&user.User.Role,
+		&isActive,
+		&user.User.IsEmailVerified,
+		&createdAt,
+		&updatedAt,
+		&lastLoginAt,
+	)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
-            return nil, status.Errorf(codes.NotFound, "user not found")
-        }
-        sr.logger.Log(common.ErrorLevel, "Error fetching user: %v", err)
-        return nil, status.Errorf(codes.Internal, "database error")
+			return nil, status.Errorf(codes.NotFound, "user not found")
+		}
+		sr.logger.Log(common.ErrorLevel, "Error fetching user: %v", err)
+		return nil, status.Errorf(codes.Internal, "database error")
+	}
+
+	if picture.Valid {
+		user.User.Picture = picture.String
+	}
+
+	user.User.CreatedAt = createdAt.Unix()
+	user.User.UpdatedAt = updatedAt.Unix()
+	user.User.LastLoginAt = lastLoginAt.Unix()
+	return user, nil
+}
+
+func (sr *UserRepository) Logout(ctx context.Context, req *pb.LogoutRequest) (*pb.LogoutResponse, error) {
+	query := `
+	DELETE FROM sessions
+    WHERE access_token = $1 AND user_id = $2
+	`
+	_, err := sr.DB.ExecContext(ctx, query, req.AccessToken, req.UserId)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, status.Errorf(codes.NotFound, "user not found")
+		}
+		sr.logger.Log(common.ErrorLevel, "Error fetching user: %v", err)
+		return nil, status.Errorf(codes.Internal, "database error")
 	}
 
 	return &pb.LogoutResponse{
 		Success: true,
-	},nil
+	}, nil
 }
-
-
-
-

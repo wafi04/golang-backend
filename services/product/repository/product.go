@@ -16,22 +16,21 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-type ProductService  struct {
-	db *sqlx.DB  
+type ProductService struct {
+	db  *sqlx.DB
 	log logger.Logger
 }
 
-func  NewProductService(db *sqlx.DB)  *ProductService{
+func NewProductService(db *sqlx.DB) *ProductService {
 	return &ProductService{
 		db: db,
 	}
-}	
-
+}
 
 func (s *ProductService) CreateProduct(ctx context.Context, req *pb.CreateProductRequest) (*pb.Product, error) {
-    now := time.Now()
-    productID := uuid.New().String()
-    query := `
+	now := time.Now()
+	productID := uuid.New().String()
+	query := `
     INSERT INTO products  
     (id, name, sub_title, description, sku, price, category_id, created_at, updated_at)
     VALUES 
@@ -39,43 +38,41 @@ func (s *ProductService) CreateProduct(ctx context.Context, req *pb.CreateProduc
     RETURNING id, name, sub_title, description, sku, price, category_id, created_at, updated_at
     `
 
-    var product pb.Product
-    var createdAt, updatedAt time.Time
+	var product pb.Product
+	var createdAt, updatedAt time.Time
 
-    err := s.db.QueryRowContext(ctx, query,
-        productID,
-        req.Product.Name,
-        req.Product.SubTitle,
-        req.Product.Description,
-        req.Product.Sku,
-        req.Product.Price,
-        req.Product.CategoryId,
-        now,
-        now,
-    ).Scan(
-        &product.Id,
-        &product.Name,
-        &product.SubTitle,
-        &product.Description,
-        &product.Sku,
-        &product.Price,
-        &product.CategoryId,
-        &createdAt,
-        &updatedAt,
-    )
+	err := s.db.QueryRowContext(ctx, query,
+		productID,
+		req.Product.Name,
+		req.Product.SubTitle,
+		req.Product.Description,
+		req.Product.Sku,
+		req.Product.Price,
+		req.Product.CategoryId,
+		now,
+		now,
+	).Scan(
+		&product.Id,
+		&product.Name,
+		&product.SubTitle,
+		&product.Description,
+		&product.Sku,
+		&product.Price,
+		&product.CategoryId,
+		&createdAt,
+		&updatedAt,
+	)
 
-    if err != nil {
-        s.log.Log(logger.ErrorLevel, "Failed to insert product: %v", err)
-        return nil, fmt.Errorf("failed to insert Product: %v", err)
-    }
+	if err != nil {
+		s.log.Log(logger.ErrorLevel, "Failed to insert product: %v", err)
+		return nil, fmt.Errorf("failed to insert Product: %v", err)
+	}
 
-    product.CreatedAt = time.Now().Unix()
-    product.UpdatedAt = time.Now().Unix()
+	product.CreatedAt = time.Now().Unix()
+	product.UpdatedAt = time.Now().Unix()
 
-    return &product, nil
+	return &product, nil
 }
-
-
 
 func (s *ProductService) GetProduct(ctx context.Context, req *pb.GetProductRequest) (*pb.Product, error) {
 	// Main product query
@@ -119,14 +116,12 @@ func (s *ProductService) GetProduct(ctx context.Context, req *pb.GetProductReque
 		return nil, fmt.Errorf("failed to get product")
 	}
 
-	// Handle nullable subtitle
 	if subTitle.Valid {
 		product.SubTitle = &subTitle.String
 	}
 
-	// Convert timestamps
-  	product.CreatedAt = time.Now().Unix()
-    product.UpdatedAt = time.Now().Unix()
+	product.CreatedAt = createdAt.Unix()
+	product.UpdatedAt = updatedAt.Unix()
 
 	variantsQuery := `
 		SELECT 
@@ -139,7 +134,7 @@ func (s *ProductService) GetProduct(ctx context.Context, req *pb.GetProductReque
 		FROM product_variants v
 		LEFT JOIN product_images img ON v.id = img.variant_id
 		WHERE v.product_id = $1
-		ORDER BY v.id, i.size, img.is_main DESC
+		ORDER BY v.id, img.is_main DESC
 	`
 
 	rows, err := s.db.QueryContext(ctx, variantsQuery, req.Id)
@@ -149,66 +144,66 @@ func (s *ProductService) GetProduct(ctx context.Context, req *pb.GetProductReque
 	}
 	defer rows.Close()
 
-	 variantMap := make(map[string]*pb.ProductVariant)
-    
-    for rows.Next() {
-        var variantId, variantColor, variantSku string
-        var imageId, imageUrl sql.NullString
-        var isMain sql.NullBool
+	variantMap := make(map[string]*pb.ProductVariant)
 
-        err := rows.Scan(
-            &variantId,
-            &variantColor,
-            &variantSku,
-            &imageId,
-            &imageUrl,
-            &isMain,
-        )
+	for rows.Next() {
+		var variantId, variantColor, variantSku string
+		var imageId, imageUrl sql.NullString
+		var isMain sql.NullBool
 
-        if err != nil {
-            s.log.Log(logger.ErrorLevel, "Failed to scan variant row: %v", err)
-            continue
-        }
+		err := rows.Scan(
+			&variantId,
+			&variantColor,
+			&variantSku,
+			&imageId,
+			&imageUrl,
+			&isMain,
+		)
 
-        // Get or create variant
-        variant, exists := variantMap[variantId]
-        if !exists {
-            variant = &pb.ProductVariant{
-                Id:        variantId,
-                Color:     variantColor,
-                Sku:       variantSku,
-                ProductId: req.Id,
-                Images:    make([]*pb.ProductImage, 0),
-            }
-            variantMap[variantId] = variant
-        }
+		if err != nil {
+			s.log.Log(logger.ErrorLevel, "Failed to scan variant row: %v", err)
+			return nil, fmt.Errorf("failed to scan variant row")
+		}
 
-        if imageId.Valid {
-            image := &pb.ProductImage{
-                Id:       imageId.String,
-                Url:      imageUrl.String,
-                VariantId: variant.Id,
-                IsMain:   isMain.Bool,
-            }
-            variant.Images = append(variant.Images, image)
-        }
-    }
+		variant, exists := variantMap[variantId]
+		if !exists {
+			variant = &pb.ProductVariant{
+				Id:        variantId,
+				Color:     variantColor,
+				Sku:       variantSku,
+				ProductId: req.Id,
+				Images:    make([]*pb.ProductImage, 0),
+			}
+			variantMap[variantId] = variant
+		}
 
-    product.Variants = make([]*pb.ProductVariant, 0, len(variantMap))
-    for _, variant := range variantMap {
-        product.Variants = append(product.Variants, variant)
-    }
+		if imageId.Valid {
+			image := &pb.ProductImage{
+				Id:        imageId.String,
+				Url:       imageUrl.String,
+				VariantId: variant.Id,
+				IsMain:    isMain.Bool,
+			}
+			variant.Images = append(variant.Images, image)
+		}
+	}
 
-    return product, nil
+	product.Variants = make([]*pb.ProductVariant, 0, len(variantMap))
+	for _, variant := range variantMap {
+		product.Variants = append(product.Variants, variant)
+	}
 
+	return product, nil
 }
-
 func (s *ProductService) ListProducts(ctx context.Context, req *pb.ListProductsRequest) (*pb.ListProductsResponse, error) {
-    if req.PageSize == 0 {
-        req.PageSize = 10
-    }
 
-    baseQuery := `
+	// Berikan nilai default untuk page_token
+	if req.PageToken == "" {
+		req.PageToken = "0" // Nilai default
+	}
+
+	// Lanjutkan dengan logika query
+	baseQuery := `
         SELECT 
             p.id,
             p.name,
@@ -228,78 +223,75 @@ func (s *ProductService) ListProducts(ctx context.Context, req *pb.ListProductsR
             products p
         WHERE 1=1
         ORDER BY p.created_at DESC
-        LIMIT :page_size
-        OFFSET (:page_size * COALESCE(NULLIF(:page_token, ''), '0')::integer)
+        LIMIT $1
+        OFFSET ($1 * COALESCE(NULLIF($2, ''), '0')::integer)
     `
 
-    params := map[string]interface{}{
-        "page_size":  req.PageSize,
-        "page_token": req.PageToken,
-    }
+	params := []interface{}{
+		req.PageSize,  // $1
+		req.PageToken, // $2
+	}
 
-    rows, err := s.db.NamedQueryContext(ctx, baseQuery, params)
-    if err != nil {
-        return nil, status.Errorf(codes.Internal, "failed to query products: %v", err)
-    }
-    defer rows.Close()
+	rows, err := s.db.QueryxContext(ctx, baseQuery, params...)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to query products: %v", err)
+	}
+	defer rows.Close()
 
-    var products []*pb.Product
-    for rows.Next() {
-        var product struct {
-            ID          string          `db:"id"`
-            Name        string          `db:"name"`
-            SubTitle    sql.NullString  `db:"sub_title"`
-            Description string          `db:"description"`
-            Price       float64         `db:"price"`
-            SKU         string          `db:"sku"`
-            CategoryID  string          `db:"category_id"`
-            CreatedAt   time.Time       `db:"created_at"`
-            UpdatedAt   time.Time       `db:"updated_at"`
-            Variants    json.RawMessage `db:"variants"`
-        }
+	var products []*pb.Product
+	for rows.Next() {
+		var product struct {
+			ID          string          `db:"id"`
+			Name        string          `db:"name"`
+			SubTitle    sql.NullString  `db:"sub_title"`
+			Description string          `db:"description"`
+			Price       float64         `db:"price"`
+			SKU         string          `db:"sku"`
+			CategoryID  string          `db:"category_id"`
+			CreatedAt   time.Time       `db:"created_at"`
+			UpdatedAt   time.Time       `db:"updated_at"`
+			Variants    json.RawMessage `db:"variants"`
+		}
 
-        if err := rows.StructScan(&product); err != nil {
-            return nil, status.Errorf(codes.Internal, "failed to scan product: %v", err)
-        }
+		if err := rows.StructScan(&product); err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to scan product: %v", err)
+		}
 
-        pbProduct := &pb.Product{
-            Id:          product.ID,
-            Name:        product.Name,
-            Description: product.Description,
-            Price:      product.Price,
-            Sku:        product.SKU,
-            CategoryId: product.CategoryID,
-            CreatedAt:  time.Now().Unix(),
-            UpdatedAt:  time.Now().Unix(),
-        }
-        if product.SubTitle.Valid {
-            pbProduct.SubTitle = &product.SubTitle.String
-        }
+		pbProduct := &pb.Product{
+			Id:          product.ID,
+			Name:        product.Name,
+			Description: product.Description,
+			Price:       product.Price,
+			Sku:         product.SKU,
+			CategoryId:  product.CategoryID,
+			CreatedAt:   product.CreatedAt.Unix(),
+			UpdatedAt:   product.UpdatedAt.Unix(),
+		}
+		if product.SubTitle.Valid {
+			pbProduct.SubTitle = &product.SubTitle.String
+		}
 
-        var variants []*pb.ProductVariant
-        if err := json.Unmarshal(product.Variants, &variants); err != nil {
-            return nil, status.Errorf(codes.Internal, "failed to parse variants: %v", err)
-        }
-        pbProduct.Variants = variants
+		var variants []*pb.ProductVariant
+		if err := json.Unmarshal(product.Variants, &variants); err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to parse variants: %v", err)
+		}
+		pbProduct.Variants = variants
 
-        products = append(products, pbProduct)
-    }
+		products = append(products, pbProduct)
+	}
 
-    if err = rows.Err(); err != nil {
-        return nil, status.Errorf(codes.Internal, "error iterating products: %v", err)
-    }
+	if err = rows.Err(); err != nil {
+		return nil, status.Errorf(codes.Internal, "error iterating products: %v", err)
+	}
 
-    nextPageToken := ""
-    if len(products) == int(req.PageSize) {
-        currentPage := 0
-        if req.PageToken != "" {
-            currentPage, _ = strconv.Atoi(req.PageToken)
-        }
-        nextPageToken = strconv.Itoa(currentPage + 1)
-    }
+	nextPageToken := ""
+	if len(products) == int(req.PageSize) {
+		currentPage, _ := strconv.Atoi(req.PageToken)
+		nextPageToken = strconv.Itoa(currentPage + 1)
+	}
 
-    return &pb.ListProductsResponse{
-        Products:      products,
-        NextPageToken: nextPageToken,
-    }, nil
+	return &pb.ListProductsResponse{
+		Products:      products,
+		NextPageToken: nextPageToken,
+	}, nil
 }

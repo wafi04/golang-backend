@@ -22,7 +22,7 @@ type FileHandler struct {
 
 
 func NewFilesGateway(ctx context.Context) (*FileHandler, error) {
-    conn, err := authhandler.ConnectWithRetry(common.LoadEnv("FILES_PORT"), "files")
+    conn, err := authhandler.ConnectWithRetry("files:5004", "files")
     if err != nil {
         return nil, err
     }

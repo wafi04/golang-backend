@@ -1,50 +1,101 @@
 package main
 
 import (
+	"context"
 	"net"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
+	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/wafi04/common/pkg/logger"
 	"github.com/wafi04/golang-backend/configs/database"
 	"github.com/wafi04/golang-backend/grpc/pb"
+	"github.com/wafi04/golang-backend/services/category/handler"
+	"github.com/wafi04/golang-backend/services/category/service"
 	"github.com/wafi04/golang-backend/services/common"
-	"github.com/wafi04/golang-backend/services/product/handler"
-	productrepo "github.com/wafi04/golang-backend/services/product/repository"
 	"google.golang.org/grpc"
 )
 
+type Config struct {
+	DatabaseURL string
+	Port        string
+}
 
-func main(){
-	log :=  common.NewLogger()
-	db ,err :=  database.NewDB(common.LoadEnv("DATABASE_PRODUCT"))
-		if err != nil {
-		log.Log(common.ErrorLevel, "Failed to initialize database : %v: ", err)
+func loadConfig() Config {
+	return Config{
+		DatabaseURL: common.LoadEnv("DATABASE_PRODUCT"),
+		Port:        common.LoadEnv("PRODUCT_PORT"),
+	}
+}
+
+func main() {
+	log := logger.NewLogger()
+	config := loadConfig()
+
+	db, err := database.NewDB(config.DatabaseURL)
+	if err != nil {
+		log.Log(logger.ErrorLevel, "Failed to initialize database: %v", err)
+		return
 	}
 	defer db.Close()
-
+	
 	health := db.Health()
-	log.Log(common.InfoLevel, "Database health : %v", health["status"])
+	log.Log(logger.InfoLevel, "Database health: %v", health["status"])
 
+	categoryService := service.NewCategoryService(db.DB)
+	categoryHandler := handler.NewCategoryHandler(categoryService)
 
-	productService := productrepo.NewProductService(db.DB)
-    productHandler := handler.NewProductHandler(productService)
+		grpcServer := grpc.NewServer(
+			grpc.StreamInterceptor(grpc_prometheus.StreamServerInterceptor),
+			grpc.UnaryInterceptor(grpc_prometheus.UnaryServerInterceptor),
+		)
+		pb.RegisterCategoryServiceServer(grpcServer, categoryHandler)
 
-	grpcServer := grpc.NewServer()
+	http.Handle("/metrics", promhttp.Handler())
+	httpServer := &http.Server{
+		Addr:    ":5053",
+		Handler: nil,
+	}
 
-	port :=  common.LoadEnv("PRODUCT_PORT")
+	go func() {
+		log.Log(logger.InfoLevel, "Starting HTTP server for metrics on :8083")
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Log(logger.ErrorLevel, "HTTP server error: %v", err)
+		}
+	}()
 
-    pb.RegisterProductServiceServer(grpcServer, productHandler)
+	
+	lis, err := net.Listen("tcp", config.Port)
+	if err != nil {
+		log.Log(logger.ErrorLevel, "Failed to listen: %v", err)
+		return
+	}
 
-    lis, err := net.Listen("tcp", port)
-    if err != nil {
-        log.Log(common.ErrorLevel, "Failed to listen: %v", err)
-        return
-    }
+	go func() {
+		log.Log(logger.InfoLevel, "gRPC server starting on port %s", config.Port)
+		if err := grpcServer.Serve(lis); err != nil {
+			log.Log(logger.ErrorLevel, "Failed to serve gRPC: %v", err)
+		}
+	}()
 
-    log.Log(common.InfoLevel, "Product service starting on port %s", port)
+	stopChan := make(chan os.Signal, 1)
+	signal.Notify(stopChan, syscall.SIGINT, syscall.SIGTERM)
+	<-stopChan
 
-    if err := grpcServer.Serve(lis); err != nil {
-        log.Log(common.ErrorLevel, "Failed to serve: %v", err)
-        return
-    }
+	log.Log(logger.InfoLevel, "Shutting down servers...")
 
+	grpcServer.GracefulStop()
+	log.Log(logger.InfoLevel, "gRPC server stopped")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := httpServer.Shutdown(ctx); err != nil {
+		log.Log(logger.ErrorLevel, "HTTP server shutdown error: %v", err)
+	}
+	log.Log(logger.InfoLevel, "HTTP server stopped")
 }

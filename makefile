@@ -22,18 +22,45 @@ gen-file:
 	--go-grpc_out=. --go-grpc_opt=paths=source_relative \
 	grpc/pb/files.proto
 
-dev-auth-start:
-	cd services/auth && air
+gen-stock:
+	@protoc --experimental_allow_proto3_optional \
+	--go_out=. --go_opt=paths=source_relative \
+	--go-grpc_out=. --go-grpc_opt=paths=source_relative \
+	grpc/pb/stock.proto
 
-dev-category-start:
-	cd services/category && air
+gen-order:
+	@protoc --experimental_allow_proto3_optional \
+	--go_out=. --go_opt=paths=source_relative \
+	--go-grpc_out=. --go-grpc_opt=paths=source_relative \
+	grpc/pb/order.proto
 
-dev-product-start:
-	cd services/product && air init && air
+down :
+	docker compose -f docker-compose-dev.yml down
 
-dev-file-start:
-	cd services/files  && air init && air
-	
-dev-gateway-start:
-	cd services/gateway   && air
+build :
+	docker compose -f docker-compose-dev.yml build
+
+up :
+	docker compose -f docker-compose-dev.yml up
+
+
+logs-auth:
+	docker logs golang-backend-auth-1
+
+logs-files:
+	docker logs golang-backend-files-1
+
+logs-gateway:
+	docker logs golang-backend-gateway-1
+
+logs-category:
+	docker logs golang-backend-category-1
+
+logs-product:
+	docker logs golang-backend-product-1
+
+logs-stock:
+	docker logs golang-backend-stock-1
+
+
 	
