@@ -100,7 +100,6 @@ func main() {
 		Addr:    ":5051",
 		Handler: nil,
 	}
-	
 
 	go func() {
 		log.Log(logger.InfoLevel, "Starting HTTP server for metrics on :5051")

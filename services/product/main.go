@@ -43,18 +43,18 @@ func main() {
 		return
 	}
 	defer db.Close()
-	
+
 	health := db.Health()
 	log.Log(logger.InfoLevel, "Database health: %v", health["status"])
 
 	categoryService := service.NewCategoryService(db.DB)
 	categoryHandler := handler.NewCategoryHandler(categoryService)
 
-		grpcServer := grpc.NewServer(
-			grpc.StreamInterceptor(grpc_prometheus.StreamServerInterceptor),
-			grpc.UnaryInterceptor(grpc_prometheus.UnaryServerInterceptor),
-		)
-		pb.RegisterCategoryServiceServer(grpcServer, categoryHandler)
+	grpcServer := grpc.NewServer(
+		grpc.StreamInterceptor(grpc_prometheus.StreamServerInterceptor),
+		grpc.UnaryInterceptor(grpc_prometheus.UnaryServerInterceptor),
+	)
+	pb.RegisterCategoryServiceServer(grpcServer, categoryHandler)
 
 	http.Handle("/metrics", promhttp.Handler())
 	httpServer := &http.Server{
@@ -69,7 +69,6 @@ func main() {
 		}
 	}()
 
-	
 	lis, err := net.Listen("tcp", config.Port)
 	if err != nil {
 		log.Log(logger.ErrorLevel, "Failed to listen: %v", err)

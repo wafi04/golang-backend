@@ -10,7 +10,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/wafi04/golang-backend/grpc/pb"
 	"github.com/wafi04/golang-backend/services/common"
-	authhandler "github.com/wafi04/golang-backend/services/gateway/server/auth"
+	"github.com/wafi04/golang-backend/services/gateway/server/config"
 )
 
 type StockHandler struct {
@@ -19,7 +19,7 @@ type StockHandler struct {
 }
 
 func NewStockGateway(ctx context.Context) (*StockHandler, error) {
-	conn, err := authhandler.ConnectWithRetry("stock:5005", "stock")
+	conn, err := config.ConnectWithRetry(config.Load().StockServiceURL, "stock")
 	log.Printf("STOCK : %s", common.LoadEnv("STOCK_SERVICE_URL"))
 	if err != nil {
 		return nil, err
@@ -50,14 +50,14 @@ func (h *StockHandler) HandleCreateStock(w http.ResponseWriter, r *http.Request)
 	})
 
 	if err != nil {
-		log.Printf("Failed to change stock: %v", err) // Log the error
+		log.Printf("Failed to change stock: %v", err)
 		common.SendErrorResponse(w, http.StatusBadRequest, "Failed to change stock")
 		return
 	}
 	duration := time.Since(start)
 	h.logger.Log(common.InfoLevel, "Response time for HandleCreateStock: %v\n", duration)
 
-	common.SendSuccessResponse(w, http.StatusAccepted, "Change stock available", stock)
+	common.SendSuccessResponse(w, http.StatusCreated, "Change stock available", stock)
 
 }
 

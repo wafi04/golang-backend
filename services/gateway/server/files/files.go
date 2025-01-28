@@ -12,26 +12,23 @@ import (
 
 	"github.com/wafi04/golang-backend/grpc/pb"
 	"github.com/wafi04/golang-backend/services/common"
-	authhandler "github.com/wafi04/golang-backend/services/gateway/server/auth"
+	"github.com/wafi04/golang-backend/services/gateway/server/config"
 )
 
-
 type FileHandler struct {
-	FilesClient  pb.FileServiceClient
+	FilesClient pb.FileServiceClient
 }
-
 
 func NewFilesGateway(ctx context.Context) (*FileHandler, error) {
-    conn, err := authhandler.ConnectWithRetry("files:5004", "files")
-    if err != nil {
-        return nil, err
-    }
-    
-    return &FileHandler{
-        FilesClient: pb.NewFileServiceClient(conn),
-    }, nil
-}
+	conn, err := config.ConnectWithRetry(config.Load().FilesServiceURL, "files")
+	if err != nil {
+		return nil, err
+	}
 
+	return &FileHandler{
+		FilesClient: pb.NewFileServiceClient(conn),
+	}, nil
+}
 
 func (s *FileHandler) HandleUploadFile(w http.ResponseWriter, r *http.Request) {
 	// Pastikan method adalah POST
@@ -65,11 +62,11 @@ func (s *FileHandler) HandleUploadFile(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	PublicID :=  fmt.Sprintf("%06d",rand.Intn(1000000))
+	PublicID := fmt.Sprintf("%06d", rand.Intn(1000000))
 
 	uploadRequest := &pb.FileUploadRequest{
 		FileData: fileBytes,
-		Folder:   "testing", 
+		Folder:   "testing",
 		PublicId: PublicID,
 	}
 
@@ -90,45 +87,42 @@ func (s *FileHandler) HandleUploadFile(w http.ResponseWriter, r *http.Request) {
 
 func (s *FileHandler) HandleUploadFiles(w http.ResponseWriter, r *http.Request) (string, error) {
 	if err := r.ParseMultipartForm(10 << 20); err != nil { // 10 MB max
-        http.Error(w, "Failed to parse form", http.StatusBadRequest)
-    }
+		http.Error(w, "Failed to parse form", http.StatusBadRequest)
+	}
 
-    file, _, err := r.FormFile("file")
-    if err != nil {
-        http.Error(w, "Error retrieving file", http.StatusBadRequest)
-    }
-    defer file.Close()
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, "Error retrieving file", http.StatusBadRequest)
+	}
+	defer file.Close()
 
-    jsonData := r.FormValue("data")
-    var req pb.CreateCategoryRequest
-    if err := json.Unmarshal([]byte(jsonData), &req); err != nil {
-        http.Error(w, "Invalid JSON data", http.StatusBadRequest)
-    }
+	jsonData := r.FormValue("data")
+	var req pb.CreateCategoryRequest
+	if err := json.Unmarshal([]byte(jsonData), &req); err != nil {
+		http.Error(w, "Invalid JSON data", http.StatusBadRequest)
+	}
 
-    // Upload file
-    fileBytes, err := io.ReadAll(file)
-    if err != nil {
-        http.Error(w, "Failed to read file", http.StatusInternalServerError)
-        
-    }
-   
-    ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-    defer cancel()
+	// Upload file
+	fileBytes, err := io.ReadAll(file)
+	if err != nil {
+		http.Error(w, "Failed to read file", http.StatusInternalServerError)
 
-    PublicID := fmt.Sprintf("%06d", rand.Intn(1000000))
-    uploadRequest := &pb.FileUploadRequest{
-        FileData: fileBytes,
-        Folder:   "testing",
-        PublicId: PublicID,
-    }
+	}
 
-    response, err := s.FilesClient.UploadFile(ctx, uploadRequest)
-    if err != nil {
-        return "", err
-    }
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
-    return response.Url, nil
+	PublicID := fmt.Sprintf("%06d", rand.Intn(1000000))
+	uploadRequest := &pb.FileUploadRequest{
+		FileData: fileBytes,
+		Folder:   "testing",
+		PublicId: PublicID,
+	}
+
+	response, err := s.FilesClient.UploadFile(ctx, uploadRequest)
+	if err != nil {
+		return "", err
+	}
+
+	return response.Url, nil
 }
-
-
-

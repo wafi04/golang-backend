@@ -13,6 +13,7 @@ import (
 	authhandler "github.com/wafi04/golang-backend/services/gateway/server/auth"
 	categoryhandler "github.com/wafi04/golang-backend/services/gateway/server/category"
 	filehandler "github.com/wafi04/golang-backend/services/gateway/server/files"
+	orderhandler "github.com/wafi04/golang-backend/services/gateway/server/order"
 	producthandler "github.com/wafi04/golang-backend/services/gateway/server/product"
 	stockhandler "github.com/wafi04/golang-backend/services/gateway/server/stock"
 )
@@ -47,6 +48,11 @@ func main() {
 		logs.Log(common.ErrorLevel, "Failed to conect	nnect stock  Service : %v", err)
 	}
 
+	orderGateway, err := orderhandler.NewProductGateway(ctx)
+	if err != nil {
+		logs.Log(common.ErrorLevel, "Failed to conec order Service : %v", err)
+	}
+
 	r := mux.NewRouter()
 
 	r.Use(func(next http.Handler) http.Handler {
@@ -56,7 +62,7 @@ func main() {
 		})
 	})
 
-	r = server.SetupRoutes(gateway, categorygateway, fileGateway, productGateway, stockGateway)
+	r = server.SetupRoutes(gateway, categorygateway, fileGateway, productGateway, stockGateway, orderGateway)
 	r.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
 		path, _ := route.GetPathTemplate()
 		methods, _ := route.GetMethods()

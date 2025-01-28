@@ -62,5 +62,9 @@ logs-product:
 logs-stock:
 	docker logs golang-backend-stock-1
 
+logs-order:
+	docker logs golang-backend-order-1
 
+start-gateway:
+	docker compose -f docker-compose-dev.yml up -d gateway
 	

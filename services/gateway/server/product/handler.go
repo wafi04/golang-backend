@@ -10,7 +10,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/wafi04/golang-backend/grpc/pb"
 	"github.com/wafi04/golang-backend/services/common"
-	authhandler "github.com/wafi04/golang-backend/services/gateway/server/auth"
+	"github.com/wafi04/golang-backend/services/gateway/server/config"
 )
 
 type ProductHandler struct {
@@ -20,13 +20,13 @@ type ProductHandler struct {
 
 func NewProductGateway(ctx context.Context) (*ProductHandler, error) {
 
-	conn, err := authhandler.ConnectWithRetry(common.LoadEnv("PRODUCT_SERVICE_URL"), "product")
-	log.Printf("produdtc : %s", common.LoadEnv("PRODUCT_SERVICE_URL"))
+	conn, err := config.ConnectWithRetry(config.Load().ProductServiceURL, "product")
+	log.Printf("produdtc : %s", config.Load().ProductServiceURL)
 	if err != nil {
 		return nil, err
 	}
 
-	connFile, err := authhandler.ConnectWithRetry(common.LoadEnv("FILES_SERVICE_URL"), "files")
+	connFile, err := config.ConnectWithRetry(config.Load().FilesServiceURL, "files")
 	log.Printf("produdtc : %s", common.LoadEnv("FILES_SERVICE_URL"))
 	if err != nil {
 		return nil, err

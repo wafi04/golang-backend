@@ -15,6 +15,7 @@ import (
 	authhandler "github.com/wafi04/golang-backend/services/gateway/server/auth"
 	categoryhandler "github.com/wafi04/golang-backend/services/gateway/server/category"
 	filehandler "github.com/wafi04/golang-backend/services/gateway/server/files"
+	orderhandler "github.com/wafi04/golang-backend/services/gateway/server/order"
 	producthandler "github.com/wafi04/golang-backend/services/gateway/server/product"
 	stockhandler "github.com/wafi04/golang-backend/services/gateway/server/stock"
 )
@@ -51,6 +52,7 @@ func SetupRoutes(
 	fileGateway *filehandler.FileHandler,
 	productGateway *producthandler.ProductHandler,
 	stockGateway *stockhandler.StockHandler,
+	orderGateway *orderhandler.OrderHandler,
 ) *mux.Router {
 	r := mux.NewRouter()
 	RecordMetrics()
@@ -135,6 +137,8 @@ func SetupRoutes(
 
 	protected.HandleFunc("/stock", stockGateway.HandleCreateStock).Methods("POST", "OPTIONS")
 	protected.HandleFunc("/stock/{id}", stockGateway.HandleCheckAvaibility).Methods("GET", "OPTIONS")
+
+	protected.HandleFunc("/order", orderGateway.HandleCreateOrder).Methods("POST", "OPTIONS")
 
 	return r
 }

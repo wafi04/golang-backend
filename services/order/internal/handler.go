@@ -1,4 +1,4 @@
-package internal
+package handler
 
 import (
 	"context"
@@ -8,15 +8,15 @@ import (
 
 type OrderHandler struct {
 	pb.UnimplementedOrderServiceServer
-	orderservice *OrderService
+	orderRepository *OrderRepository
 }
 
-func NewOrderHandler(orderService *OrderService) *OrderHandler {
+func NewOrderHandler(orderRepository *OrderRepository) *OrderHandler {
 	return &OrderHandler{
-		orderservice: orderService,
+		orderRepository: orderRepository,
 	}
 }
 
 func (h *OrderHandler) CreateOrder(ctx context.Context, req *pb.CreateOrderRequest) (*pb.Order, error) {
-	return h.orderservice.CreateOrder(ctx, req)
+	return h.orderRepository.CreateOrder(ctx, req)
 }

@@ -14,7 +14,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/wafi04/golang-backend/grpc/pb"
 	"github.com/wafi04/golang-backend/services/common"
-	authhandler "github.com/wafi04/golang-backend/services/gateway/server/auth"
+	"github.com/wafi04/golang-backend/services/gateway/server/config"
 )
 
 type CategoryHandler struct {
@@ -25,11 +25,11 @@ type CategoryHandler struct {
 func NewCategoryGateway(ctx context.Context) (*CategoryHandler, error) {
 	log.Println("Attempting to connect to category service...")
 
-	connCategory, err := authhandler.ConnectWithRetry("category:5002", "files")
+	connCategory, err := config.ConnectWithRetry(config.Load().CategoryServiceURL, "files")
 	if err != nil {
 		return nil, err
 	}
-	connFile, err := authhandler.ConnectWithRetry("files:5004", "files")
+	connFile, err := config.ConnectWithRetry(config.Load().FilesServiceURL, "files")
 	if err != nil {
 		return nil, err
 	}

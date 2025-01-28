@@ -7,13 +7,11 @@ import (
 	"log"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/wafi04/golang-backend/grpc/pb"
 	"github.com/wafi04/golang-backend/services/common"
 	"github.com/wafi04/golang-backend/services/common/middleware"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	"github.com/wafi04/golang-backend/services/gateway/server/config"
 )
 
 type AuthHandler struct {
@@ -21,37 +19,8 @@ type AuthHandler struct {
 	logger     common.Logger
 }
 
-func ConnectWithRetry(target string, service string) (*grpc.ClientConn, error) {
-	maxAttempts := 5
-	var conn *grpc.ClientConn
-	var err error
-
-	for i := 0; i < maxAttempts; i++ {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		log.Printf("Attempting to connect to %s service (attempt %d/%d)...", service, i+1, maxAttempts)
-
-		conn, err = grpc.DialContext(ctx,
-			target,
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-			grpc.WithBlock(),
-		)
-
-		if err == nil {
-			log.Printf("Successfully connected to %s service", service)
-			return conn, nil
-		}
-
-		log.Printf("Failed to connect to %s service: %v. Retrying...", service, err)
-		time.Sleep(2 * time.Second)
-	}
-
-	return nil, fmt.Errorf("failed to connect to %s service after %d attempts: %v", service, maxAttempts, err)
-}
-
 func NewGateway(ctx context.Context) (*AuthHandler, error) {
-	conn, err := ConnectWithRetry("auth:5001", "auth")
+	conn, err := config.ConnectWithRetry(config.Load().AuthServiceURL, "auth")
 	if err != nil {
 		return nil, err
 	}

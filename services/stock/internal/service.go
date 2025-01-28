@@ -28,7 +28,6 @@ func NewDB(db *sqlx.DB, redis *redis.Client) *Database {
 func (r *Database) ChangeStock(ctx context.Context, req *pb.ChangeStockRequest) (*pb.Stock, error) {
 	now := time.Now()
 
-	// Insert data into the database
 	query := `
 	INSERT INTO stock (quantity, variant_id, created_at, updated_at)
 	VALUES ($1, $2, $3, $4)
@@ -44,11 +43,9 @@ func (r *Database) ChangeStock(ctx context.Context, req *pb.ChangeStockRequest) 
 		return nil, fmt.Errorf("failed to create stock: %v", err)
 	}
 
-	// Set timestamps
 	stock.CreatedAt = now.Unix()
 	stock.UpdatedAt = now.Unix()
 
-	// Update Redis cache
 	redisKey := fmt.Sprintf("stock-%s", req.VariantId)
 
 	customStock := CustomStock{
@@ -58,7 +55,6 @@ func (r *Database) ChangeStock(ctx context.Context, req *pb.ChangeStockRequest) 
 		UpdatedAt: stock.UpdatedAt,
 	}
 
-	// Marshal the custom stock data to JSON
 	stockJSON, err := json.Marshal(customStock)
 	if err != nil {
 		fmt.Printf("Failed to marshal stock data for Redis: %v\n", err)

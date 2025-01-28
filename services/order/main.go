@@ -17,20 +17,13 @@ import (
 	"github.com/wafi04/golang-backend/configs/database"
 	"github.com/wafi04/golang-backend/grpc/pb"
 	"github.com/wafi04/golang-backend/services/common"
-	"github.com/wafi04/golang-backend/services/order/internal"
+	handler "github.com/wafi04/golang-backend/services/order/internal"
 	"google.golang.org/grpc"
 )
 
 type Config struct {
 	DatabaseURL string
 	Port        string
-}
-
-func loadConfig() Config {
-	return Config{
-		DatabaseURL: common.LoadEnv("DATABASE_PRODUCT"),
-		Port:        common.LoadEnv("PRODUCT_PORT"),
-	}
 }
 
 func main() {
@@ -47,9 +40,10 @@ func main() {
 		return
 	}
 	defer db.Close()
+	log.Log(common.InfoLevel, "change : %s", common.LoadEnv("DATABASE_STOCK"))
 
-	orderservice := internal.NewOrderService(db.DB, redisClient)
-	orderhandler := internal.NewOrderHandler(orderservice)
+	orderservice := handler.NewOrderService(db.DB, redisClient)
+	orderhandler := handler.NewOrderHandler(orderservice)
 
 	grpcServer := grpc.NewServer(
 		grpc.StreamInterceptor(grpc_prometheus.StreamServerInterceptor),
